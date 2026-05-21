@@ -918,7 +918,7 @@ defmodule ReqLLM.Providers.AnthropicTest do
              end)
     end
 
-    test "encode_request combines multiple system messages" do
+    test "encode_request encodes multiple system messages as non-empty blocks" do
       {:ok, model} = ReqLLM.model("anthropic:claude-sonnet-4-5-20250929")
 
       context =
@@ -932,7 +932,33 @@ defmodule ReqLLM.Providers.AnthropicTest do
 
       assert request[:system] == [
                %{type: "text", text: "Talk like a pirate"},
-               %{type: "text", text: "\n\n"},
+               %{type: "text", text: "Respond in verses"}
+             ]
+
+      assert request[:messages] == [%{role: "user", content: "Tell me about Elixir"}]
+    end
+
+    test "encode_request drops whitespace-only system text blocks" do
+      {:ok, model} = ReqLLM.model("anthropic:claude-sonnet-4-5-20250929")
+
+      context =
+        ReqLLM.Context.new([
+          ReqLLM.Context.system("\n\n"),
+          ReqLLM.Context.system("Talk like a pirate"),
+          ReqLLM.Context.user("Tell me about Elixir"),
+          %ReqLLM.Message{
+            role: :system,
+            content: [
+              ReqLLM.Message.ContentPart.text("\t  "),
+              ReqLLM.Message.ContentPart.text("Respond in verses")
+            ]
+          }
+        ])
+
+      request = ReqLLM.Providers.Anthropic.Context.encode_request(context, model)
+
+      assert request[:system] == [
+               %{type: "text", text: "Talk like a pirate"},
                %{type: "text", text: "Respond in verses"}
              ]
 
