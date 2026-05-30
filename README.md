@@ -23,33 +23,33 @@ LLM APIs are inconsistent. ReqLLM provides a unified, idiomatic Elixir interface
 
 **Model Support Snapshot**
 
-ReqLLM currently exposes **1,205 models across 21 implemented provider integrations** from the [models.dev](https://models.dev) catalog via `llm_db`. Counting the cataloged-but-not-separate `google_vertex_anthropic` namespace, the registry contains **1,218 models across 22 provider namespaces**.
+ReqLLM currently exposes **1,205 models across 21 implemented provider integrations** from [LLMDB](https://llmdb.xyz), the model catalog maintained through `llm_db`. Counting the cataloged-but-not-separate `google_vertex_anthropic` namespace, the registry contains **1,218 models across 22 provider namespaces**.
 
 That breadth extends well beyond chat: ReqLLM tracks **92 non-text operation models** across embedding, image generation, text-to-speech, transcription, rerank, and OCR APIs. The fixture suite currently contains **619 unique recorded model specs**, giving ReqLLM a compatibility ledger for text and multi-modal provider behavior.
 
 | Provider | ID | Catalog models | Operation surface | Recorded specs | Guide |
 |---|---|---:|---|---:|---|
-| [Alibaba Cloud Bailian](https://www.alibabacloud.com/help/en/model-studio) | `alibaba` | 50 | text, OCR 1, transcription 1 | 0 | — |
-| [Alibaba Cloud Bailian (China)](https://www.alibabacloud.com/help/en/model-studio) | `alibaba_cn` | 82 | text, OCR 1, transcription 1 | 0 | — |
-| [Amazon Bedrock](https://aws.amazon.com/bedrock/) | `amazon_bedrock` | 92 | text, embedding 3 | 7 | [Guide](guides/amazon_bedrock.md) |
-| [Anthropic](https://anthropic.com) | `anthropic` | 11 | text | 11 | [Guide](guides/anthropic.md) |
-| [Azure OpenAI](https://azure.microsoft.com/en-us/products/ai-services/openai-service) | `azure` | 103 | text, embedding 6 | 26 | [Guide](guides/azure.md) |
-| [Cerebras](https://cerebras.ai) | `cerebras` | 5 | text | 2 | [Guide](guides/cerebras.md) |
-| [Cohere](https://cohere.com) | `cohere` | 17 | text, rerank 5 | 5 | — |
-| [ElevenLabs](https://elevenlabs.io) | `elevenlabs` | 4 | speech 4 | 4 | — |
-| [Fireworks AI](https://fireworks.ai) | `fireworks_ai` | 12 | text | 12 | [Guide](guides/fireworks_ai.md) |
-| [Google Gemini](https://ai.google.dev) | `google` | 50 | text, embedding 2, image 8 | 24 | [Guide](guides/google.md) |
-| [Google Vertex AI](https://cloud.google.com/vertex-ai) | `google_vertex` | 40 | text | 11 | [Guide](guides/google_vertex.md) |
-| [Groq](https://groq.com) | `groq` | 18 | text, speech 2, transcription 2 | 11 | [Guide](guides/groq.md) |
-| [MiniMax](https://www.minimax.io) | `minimax` | 6 | text | 6 | — |
-| [OpenAI](https://openai.com) | `openai` | 86 | text, embedding 3, image 5, speech 6, transcription 7 | 64 | [Guide](guides/openai.md) |
-| [OpenRouter](https://openrouter.ai) | `openrouter` | 364 | text, embedding 25, image 5 | 234 | [Guide](guides/openrouter.md) |
-| [Venice](https://venice.ai) | `venice` | 67 | text | 67 | — |
-| [xAI](https://x.ai) | `xai` | 26 | text, image 3 | 21 | [Guide](guides/xai.md) |
-| [Z.AI](https://z.ai) | `zai` | 13 | text | 2 | [Guide](guides/zai.md) |
-| [Z.AI Coder](https://z.ai) | `zai_coder` | 5 | text | 1 | [Guide](guides/zai_coder.md) |
-| [Z.AI Coding Plan](https://z.ai) | `zai_coding_plan` | 5 | text | 4 | — |
-| [Zenmux](https://zenmux.ai) | `zenmux` | 149 | text, image 2 | 107 | [Guide](guides/zenmux.md) |
+| [Alibaba Cloud Bailian](https://llmdb.xyz/?providers=alibaba) | `alibaba` | 50 | text, OCR 1, transcription 1 | 0 | — |
+| [Alibaba Cloud Bailian (China)](https://llmdb.xyz/?providers=alibaba_cn) | `alibaba_cn` | 82 | text, OCR 1, transcription 1 | 0 | — |
+| [Amazon Bedrock](https://llmdb.xyz/?providers=amazon_bedrock) | `amazon_bedrock` | 92 | text, embedding 3 | 7 | [Guide](guides/amazon_bedrock.md) |
+| [Anthropic](https://llmdb.xyz/?providers=anthropic) | `anthropic` | 11 | text | 11 | [Guide](guides/anthropic.md) |
+| [Azure OpenAI](https://llmdb.xyz/?providers=azure) | `azure` | 103 | text, embedding 6 | 26 | [Guide](guides/azure.md) |
+| [Cerebras](https://llmdb.xyz/?providers=cerebras) | `cerebras` | 5 | text | 2 | [Guide](guides/cerebras.md) |
+| [Cohere](https://llmdb.xyz/?providers=cohere) | `cohere` | 17 | text, rerank 5 | 5 | — |
+| [ElevenLabs](https://llmdb.xyz/?providers=elevenlabs) | `elevenlabs` | 4 | speech 4 | 4 | — |
+| [Fireworks AI](https://llmdb.xyz/?providers=fireworks_ai) | `fireworks_ai` | 12 | text | 12 | [Guide](guides/fireworks_ai.md) |
+| [Google Gemini](https://llmdb.xyz/?providers=google) | `google` | 50 | text, embedding 2, image 8 | 24 | [Guide](guides/google.md) |
+| [Google Vertex AI](https://llmdb.xyz/?providers=google_vertex) | `google_vertex` | 40 | text | 11 | [Guide](guides/google_vertex.md) |
+| [Groq](https://llmdb.xyz/?providers=groq) | `groq` | 18 | text, speech 2, transcription 2 | 11 | [Guide](guides/groq.md) |
+| [MiniMax](https://llmdb.xyz/?providers=minimax) | `minimax` | 6 | text | 6 | — |
+| [OpenAI](https://llmdb.xyz/?providers=openai) | `openai` | 86 | text, embedding 3, image 5, speech 6, transcription 7 | 64 | [Guide](guides/openai.md) |
+| [OpenRouter](https://llmdb.xyz/?providers=openrouter) | `openrouter` | 364 | text, embedding 25, image 5 | 234 | [Guide](guides/openrouter.md) |
+| [Venice](https://llmdb.xyz/?providers=venice) | `venice` | 67 | text | 67 | — |
+| [xAI](https://llmdb.xyz/?providers=xai) | `xai` | 26 | text, image 3 | 21 | [Guide](guides/xai.md) |
+| [Z.AI](https://llmdb.xyz/?providers=zai) | `zai` | 13 | text | 2 | [Guide](guides/zai.md) |
+| [Z.AI Coder](https://llmdb.xyz/?providers=zai_coder) | `zai_coder` | 5 | text | 1 | [Guide](guides/zai_coder.md) |
+| [Z.AI Coding Plan](https://llmdb.xyz/?providers=zai_coding_plan) | `zai_coding_plan` | 5 | text | 4 | — |
+| [Zenmux](https://llmdb.xyz/?providers=zenmux) | `zenmux` | 149 | text, image 2 | 107 | [Guide](guides/zenmux.md) |
 
 \* _Streaming uses Finch directly due to known Req limitations with SSE responses._
 
@@ -141,7 +141,7 @@ usage = ReqLLM.StreamResponse.usage(response)
 ## Features
 
 - **Provider-agnostic model registry**
-  - 21 implemented providers / 1,205 models sourced from [models.dev](https://models.dev) via the `llm_db` dependency
+  - 21 implemented providers / 1,205 models sourced from [LLMDB](https://llmdb.xyz) via the `llm_db` dependency
   - Text, embedding, image generation, speech, transcription, rerank and OCR operation metadata
   - Cost, context length, modality, capability and deprecation metadata included
 
@@ -424,7 +424,7 @@ text = ReqLLM.StreamResponse.text(response)
 
 ## Adding a Provider
 
-ReqLLM uses OpenAI Chat Completions as the baseline API standard. Providers that support this format (like Groq, OpenRouter, xAI) require minimal overrides using the `ReqLLM.Provider.DSL`. Model metadata is automatically synced from [models.dev](https://models.dev).
+ReqLLM uses OpenAI Chat Completions as the baseline API standard. Providers that support this format (like Groq, OpenRouter, xAI) require minimal overrides using the `ReqLLM.Provider.DSL`. Model metadata is automatically synced from [LLMDB](https://llmdb.xyz).
 
 Providers implement the `ReqLLM.Provider` behavior with functions like `encode_body/1`, `decode_response/1`, and optional parameter translation via `translate_options/3`.
 
