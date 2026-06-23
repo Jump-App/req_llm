@@ -139,6 +139,16 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
         text = data["delta"] || ""
         if text == "", do: [], else: [ReqLLM.StreamChunk.thinking(text, thinking_metadata(data))]
 
+      "response.reasoning_summary_text.delta" ->
+        text = data["delta"] || ""
+        if text == "", do: [], else: [ReqLLM.StreamChunk.thinking(text, thinking_metadata(data))]
+
+      "response.reasoning_summary_text.done" ->
+        []
+
+      "response.reasoning_summary_part.done" ->
+        []
+
       "response.usage" ->
         usage_data = data["usage"] || %{}
 
@@ -690,7 +700,7 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
     tools = encode_tools_if_any(temp_request) |> ensure_deep_research_tools(temp_request)
 
     tool_choice = encode_tool_choice(opts_map[:tool_choice])
-    reasoning = encode_reasoning_effort(opts_map[:reasoning_effort])
+    reasoning = encode_reasoning(reasoning_input(opts_map, provider_opts))
     service_tier = opts_map[:service_tier] || provider_opts[:service_tier]
     include = response_include(provider_opts, model_name)
 
@@ -1585,13 +1595,39 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
   defp encode_tool_choice("required"), do: "required"
   defp encode_tool_choice(_), do: nil
 
-  defp encode_reasoning_effort(nil), do: nil
+  defp reasoning_input(opts_map, provider_opts) do
+    effort = opts_map[:reasoning_effort]
+    summary = provider_opts[:reasoning_summary]
 
-  defp encode_reasoning_effort(effort) when is_atom(effort),
+    cond do
+      is_nil(effort) and is_nil(summary) -> nil
+      is_nil(summary) -> effort
+      true -> %{effort: effort, summary: summary}
+    end
+  end
+
+  defp encode_reasoning(nil), do: nil
+
+  defp encode_reasoning(effort) when is_atom(effort),
     do: %{"effort" => Atom.to_string(effort)}
 
-  defp encode_reasoning_effort(effort) when is_binary(effort), do: %{"effort" => effort}
-  defp encode_reasoning_effort(_), do: nil
+  defp encode_reasoning(effort) when is_binary(effort), do: %{"effort" => effort}
+
+  defp encode_reasoning(%{effort: effort, summary: summary}) do
+    %{}
+    |> maybe_put_reasoning_key("effort", encode_reasoning_value(effort))
+    |> maybe_put_reasoning_key("summary", encode_reasoning_value(summary))
+  end
+
+  defp encode_reasoning(_), do: nil
+
+  defp encode_reasoning_value(nil), do: nil
+  defp encode_reasoning_value(value) when is_atom(value), do: Atom.to_string(value)
+  defp encode_reasoning_value(value) when is_binary(value), do: value
+  defp encode_reasoning_value(_), do: nil
+
+  defp maybe_put_reasoning_key(map, _key, nil), do: map
+  defp maybe_put_reasoning_key(map, key, value), do: Map.put(map, key, value)
 
   @doc false
   def encode_text_format(response_format, verbosity \\ nil)
