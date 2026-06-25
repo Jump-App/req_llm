@@ -511,6 +511,43 @@ defmodule Provider.OpenAI.ResponsesAPIUnitTest do
       assert body["reasoning"] == %{"effort" => "xhigh"}
     end
 
+    test "encodes reasoning summary alongside effort" do
+      request = build_request(reasoning_effort: :high, reasoning_summary: "auto")
+
+      encoded = ResponsesAPI.encode_body(request)
+      body = ReqLLM.Test.Helpers.json_body(encoded)
+
+      assert body["reasoning"] == %{"effort" => "high", "summary" => "auto"}
+    end
+
+    test "encodes atom reasoning summary value" do
+      request = build_request(reasoning_effort: :medium, reasoning_summary: :detailed)
+
+      encoded = ResponsesAPI.encode_body(request)
+      body = ReqLLM.Test.Helpers.json_body(encoded)
+
+      assert body["reasoning"] == %{"effort" => "medium", "summary" => "detailed"}
+    end
+
+    test "encodes reasoning summary without effort" do
+      request = build_request(reasoning_summary: "auto")
+
+      encoded = ResponsesAPI.encode_body(request)
+      body = ReqLLM.Test.Helpers.json_body(encoded)
+
+      assert body["reasoning"] == %{"summary" => "auto"}
+      refute Map.has_key?(body["reasoning"], "effort")
+    end
+
+    test "keeps backward-compatible reasoning shape without summary" do
+      request = build_request(reasoning_effort: :low)
+
+      encoded = ResponsesAPI.encode_body(request)
+      body = ReqLLM.Test.Helpers.json_body(encoded)
+
+      assert body["reasoning"] == %{"effort" => "low"}
+    end
+
     test "omits reasoning effort when nil" do
       request = build_request(provider_options: [])
 
@@ -945,6 +982,27 @@ defmodule Provider.OpenAI.ResponsesAPIUnitTest do
       assert [thinking_part] = resp.body.message.content
       assert thinking_part.type == :thinking
       assert thinking_part.text == "Thinking about this..."
+    end
+
+    test "extracts reasoning summary text via Response.thinking/1" do
+      response_body = %{
+        "id" => "resp_123",
+        "model" => "gpt-5",
+        "output" => [
+          %{
+            "type" => "reasoning",
+            "id" => "rs_123",
+            "summary" => [
+              %{"type" => "summary_text", "text" => "Determining if 143 is prime..."}
+            ]
+          }
+        ],
+        "usage" => %{"input_tokens" => 5, "output_tokens" => 10}
+      }
+
+      {_req, resp} = ResponsesAPI.decode_response(build_response(200, response_body))
+
+      assert ReqLLM.Response.thinking(resp.body) == "Determining if 143 is prime..."
     end
 
     test "decodes reasoning content" do
@@ -1479,6 +1537,42 @@ defmodule Provider.OpenAI.ResponsesAPIUnitTest do
 
     test "ignores empty reasoning delta", %{model: model} do
       event = %{data: %{"event" => "response.reasoning.delta", "delta" => ""}}
+
+      assert [] = ResponsesAPI.decode_stream_event(event, model)
+    end
+
+    test "decodes reasoning summary text delta", %{model: model} do
+      event = %{
+        data: %{
+          "event" => "response.reasoning_summary_text.delta",
+          "delta" => "Checking primality..."
+        }
+      }
+
+      assert [chunk] = ResponsesAPI.decode_stream_event(event, model)
+      assert chunk.type == :thinking
+      assert chunk.text == "Checking primality..."
+    end
+
+    test "ignores empty reasoning summary text delta", %{model: model} do
+      event = %{
+        data: %{
+          "event" => "response.reasoning_summary_text.delta",
+          "delta" => ""
+        }
+      }
+
+      assert [] = ResponsesAPI.decode_stream_event(event, model)
+    end
+
+    test "ignores reasoning summary text done event", %{model: model} do
+      event = %{data: %{"event" => "response.reasoning_summary_text.done"}}
+
+      assert [] = ResponsesAPI.decode_stream_event(event, model)
+    end
+
+    test "ignores reasoning summary part done event", %{model: model} do
+      event = %{data: %{"event" => "response.reasoning_summary_part.done"}}
 
       assert [] = ResponsesAPI.decode_stream_event(event, model)
     end
@@ -2549,6 +2643,12 @@ defmodule Provider.OpenAI.ResponsesAPIUnitTest do
   defp build_request(opts) do
     context = Keyword.get(opts, :context, %ReqLLM.Context{messages: []})
     provider_opts = Keyword.get(opts, :provider_options, [])
+
+    provider_opts =
+      case Keyword.get(opts, :reasoning_summary) do
+        nil -> provider_opts
+        summary -> Keyword.put(provider_opts, :reasoning_summary, summary)
+      end
 
     req_opts =
       %{
