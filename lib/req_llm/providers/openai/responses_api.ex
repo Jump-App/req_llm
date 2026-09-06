@@ -167,6 +167,16 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       "response.reasoning_summary_part.done" ->
         []
 
+      "response.reasoning_summary_text.delta" ->
+        text = data["delta"] || ""
+        if text == "", do: [], else: [ReqLLM.StreamChunk.thinking(text, thinking_metadata(data))]
+
+      "response.reasoning_summary_text.done" ->
+        []
+
+      "response.reasoning_summary_part.done" ->
+        []
+
       "response.usage" ->
         usage_data = data["usage"] || %{}
 
