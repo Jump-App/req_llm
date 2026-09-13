@@ -232,7 +232,8 @@ defmodule ReqLLM.Providers.AmazonBedrock.Converse do
       message: message,
       finish_reason: map_stop_reason(stop_reason),
       usage: parse_usage(usage),
-      provider_meta: response_provider_meta(response_body),
+      provider_meta:
+        response_body |> response_provider_meta() |> put_annotations(citations(message_data)),
       stream?: false
     }
 
@@ -262,9 +263,10 @@ defmodule ReqLLM.Providers.AmazonBedrock.Converse do
     %{response | object: extracted_object}
   end
 
-  def init_stream_state, do: %{reasoning_blocks: %{}, next_reasoning_index: 0}
+  def init_stream_state,
+    do: %{reasoning_blocks: %{}, next_reasoning_index: 0, citation_blocks: %{}, text_offset: 0}
 
-  @doc "Emits `reasoning_details` when a reasoning block receives `contentBlockStop`."
+  @doc "Emits reasoning details and citation ranges when their content block stops."
   def decode_stream_event(event, nil), do: decode_stream_event(event, init_stream_state())
 
   def decode_stream_event(%{"contentBlockDelta" => delta_data} = event, state) do
@@ -282,14 +284,14 @@ defmodule ReqLLM.Providers.AmazonBedrock.Converse do
         {[], append_reasoning(state, index, :redacted, data)}
 
       _ ->
-        {stateless_chunks(event), state}
+        decode_citation_event(event, state)
     end
   end
 
   def decode_stream_event(%{"contentBlockStop" => %{"contentBlockIndex" => index}}, state) do
     case Map.pop(state.reasoning_blocks, index) do
       {nil, _blocks} ->
-        {[], state}
+        finish_citation_block(state, index)
 
       {block, blocks} ->
         detail = reasoning_detail(block, state.next_reasoning_index)
@@ -301,10 +303,16 @@ defmodule ReqLLM.Providers.AmazonBedrock.Converse do
 
   def decode_stream_event(event, state), do: {stateless_chunks(event), state}
 
-  @doc "Emit reasoning details for blocks that never received a `contentBlockStop`."
+  @doc "Emit reasoning details and citations for blocks that never stopped."
   def flush_stream_state(nil), do: {[], init_stream_state()}
 
   def flush_stream_state(state) do
+    {citation_chunks, state} =
+      state.citation_blocks
+      |> Map.keys()
+      |> Enum.sort()
+      |> Enum.flat_map_reduce(state, &finish_citation_block(&2, &1))
+
     state.reasoning_blocks
     |> Enum.sort_by(fn {index, _block} -> index end)
     |> Enum.map_reduce(%{state | reasoning_blocks: %{}}, fn {_index, block}, acc ->
@@ -312,8 +320,56 @@ defmodule ReqLLM.Providers.AmazonBedrock.Converse do
        %{acc | next_reasoning_index: acc.next_reasoning_index + 1}}
     end)
     |> case do
-      {[], state} -> {[], state}
-      {details, state} -> {[ReqLLM.StreamChunk.meta(%{reasoning_details: details})], state}
+      {[], state} ->
+        {citation_chunks, state}
+
+      {details, state} ->
+        {[ReqLLM.StreamChunk.meta(%{reasoning_details: details}) | citation_chunks], state}
+    end
+  end
+
+  defp decode_citation_event(%{"contentBlockDelta" => data} = event, state) do
+    index = data["contentBlockIndex"]
+
+    block =
+      Map.get(state.citation_blocks, index, %{
+        start: state.text_offset,
+        end: state.text_offset,
+        citations: []
+      })
+
+    case data["delta"] do
+      %{"text" => text} when is_binary(text) ->
+        offset = state.text_offset + text_length(text)
+        block = %{block | end: offset}
+
+        {stateless_chunks(event),
+         %{
+           state
+           | text_offset: offset,
+             citation_blocks: Map.put(state.citation_blocks, index, block)
+         }}
+
+      %{"citation" => citation} ->
+        block = %{block | citations: [citation | block.citations]}
+        {[], %{state | citation_blocks: Map.put(state.citation_blocks, index, block)}}
+
+      _ ->
+        {stateless_chunks(event), state}
+    end
+  end
+
+  defp finish_citation_block(state, index) do
+    {block, blocks} = Map.pop(state.citation_blocks, index)
+    state = %{state | citation_blocks: blocks}
+
+    case block do
+      %{citations: [_ | _] = citations, start: start, end: stop} ->
+        annotations = citations |> Enum.reverse() |> citation_ranges(start, stop)
+        {[ReqLLM.StreamChunk.meta(%{annotations: annotations})], state}
+
+      _ ->
+        {[], state}
     end
   end
 
@@ -433,6 +489,14 @@ defmodule ReqLLM.Providers.AmazonBedrock.Converse do
               {:ok, nil}
             end
 
+          citation = get_in(delta_data, ["delta", "citation"]) ->
+            {:ok,
+             ReqLLM.StreamChunk.meta(%{
+               annotations: [
+                 Map.put(citation, "content_block_index", delta_data["contentBlockIndex"])
+               ]
+             })}
+
           true ->
             {:ok, nil}
         end
@@ -467,6 +531,40 @@ defmodule ReqLLM.Providers.AmazonBedrock.Converse do
 
   defp response_provider_meta(%{"trace" => trace}) when is_map(trace), do: %{trace: trace}
   defp response_provider_meta(_response_body), do: %{}
+
+  defp citations(%{"content" => blocks}) when is_list(blocks) do
+    {annotations, _offset} =
+      Enum.map_reduce(blocks, 0, fn block, offset ->
+        case block do
+          %{"citationsContent" => cited} ->
+            stop = offset + text_length(citation_text(cited))
+            {citation_ranges(Map.get(cited, "citations", []), offset, stop), stop}
+
+          %{"text" => text} ->
+            {[], offset + text_length(text)}
+
+          _ ->
+            {[], offset}
+        end
+      end)
+
+    annotations |> List.flatten() |> Enum.uniq()
+  end
+
+  defp citations(_message_data), do: []
+
+  defp citation_ranges(citations, start, stop) do
+    Enum.map(citations, &Map.merge(&1, %{"start_index" => start, "end_index" => stop}))
+  end
+
+  defp text_length(text), do: text |> String.to_charlist() |> length()
+
+  defp citation_text(block), do: Enum.map_join(Map.get(block, "content", []), & &1["text"])
+
+  defp put_annotations(provider_meta, []), do: provider_meta
+
+  defp put_annotations(provider_meta, citations),
+    do: Map.put(provider_meta, "annotations", citations)
 
   defp maybe_put_usage(meta, nil), do: meta
   defp maybe_put_usage(meta, usage), do: Map.put(meta, :usage, parse_usage(usage))
@@ -884,7 +982,7 @@ defmodule ReqLLM.Providers.AmazonBedrock.Converse do
     source = encode_source(part)
 
     %{"name" => document_name(part), "format" => format, "source" => source}
-    |> put_document_context(part)
+    |> put_document_options(part)
   end
 
   defp media_block(_block, part, format),
@@ -938,12 +1036,20 @@ defmodule ReqLLM.Providers.AmazonBedrock.Converse do
   defp filename_stem(nil), do: ""
   defp filename_stem(filename), do: filename |> Path.basename() |> Path.rootname()
 
-  defp put_document_context(block, %ContentPart{metadata: metadata}) do
-    case metadata_value(metadata, :context) do
-      nil -> block
-      context -> Map.put(block, "context", context)
-    end
+  defp put_document_options(block, %ContentPart{metadata: metadata}) do
+    block
+    |> put_option("context", metadata_value(metadata, :context))
+    |> put_option("citations", citations_config(metadata_value(metadata, :citations)))
   end
+
+  defp put_option(block, _key, nil), do: block
+  defp put_option(block, key, value), do: Map.put(block, key, value)
+
+  defp citations_config(nil), do: nil
+  defp citations_config(enabled) when is_boolean(enabled), do: %{"enabled" => enabled}
+
+  defp citations_config(value),
+    do: invalid_part("citations must be a boolean, got #{inspect(value)}")
 
   defp invalid_part(parameter), do: raise(ReqLLM.Error.Invalid.Parameter, parameter: parameter)
 
@@ -1165,6 +1271,13 @@ defmodule ReqLLM.Providers.AmazonBedrock.Converse do
   end
 
   defp parse_content_block(%{"reasoningContent" => _redacted}), do: nil
+
+  defp parse_content_block(%{"citationsContent" => block}) do
+    case citation_text(block) do
+      "" -> nil
+      text -> ContentPart.text(text)
+    end
+  end
 
   defp parse_content_block(%{"image" => _image}) do
     # Image in response - for now skip
